@@ -3,6 +3,7 @@
   #include <Adafruit_MCP23017.h>
   #include <Adafruit_RGBLCDShield.h>
   Adafruit_RGBLCDShield lcd = Adafruit_RGBLCDShield();
+  #include <usb_keyboard.h>
                               // LCD backlight color
   #define RED 0x1
   #define YELLOW 0x3
@@ -23,9 +24,9 @@
   #define CTRLBUTTONS_N 12     //ctrl buttons used to trigger clips
   #define NUM_BANKS 2
   #define CTRL_DEL
-  #define CTRL_STOP 71
+  #define CTRL_STOP 71        //begin of control values available to footpedal (71-128)
   #define CTRL_PLAY 72
-  #define CTRL_START 72      //begin of control values available to footpedal (71-128) 1 gets added in the code
+  #define CTRL_START 73      //start of ctrl values for buttons (number up in forloop)
   int bank = 0;
 
   #define CTRLBUTTONS_N 12
@@ -36,23 +37,20 @@
   Bounce buttonStop = Bounce(BUTTONSTOP, 50);
   Bounce buttonPlay = Bounce (BUTTONPLAY, 50);
   
-  /*for(int i = 0; i < CTRLBUTTONS_N; i++){                    //BOUNCE FORLOOP HOW???
-  Bounce buttons[i] = Bounce (buttonPins[i], 20); 
-  }
-  */
-
-  Bounce button0 = Bounce (buttonPins[0], 50); 
-  Bounce button1 = Bounce (buttonPins[1], 50); 
-  Bounce button2 = Bounce (buttonPins[2], 50); 
-  Bounce button3 = Bounce (buttonPins[3], 50);
-  Bounce button4 = Bounce (buttonPins[4], 50);
-  Bounce button5 = Bounce (buttonPins[5], 50);
-  Bounce button6 = Bounce (buttonPins[6], 50);
-  Bounce button7 = Bounce (buttonPins[7], 50);
-  Bounce button8 = Bounce (buttonPins[8], 50);
-  Bounce button9 = Bounce (buttonPins[9], 50);
-  Bounce button10 = Bounce (buttonPins[10], 50);
-  Bounce button11 = Bounce (buttonPins[11], 50);
+  Bounce buttons[12] = {
+    Bounce (buttonPins[0], 50), 
+    Bounce (buttonPins[1], 50), 
+    Bounce (buttonPins[2], 50), 
+    Bounce (buttonPins[3], 50),
+    Bounce (buttonPins[4], 50),
+    Bounce (buttonPins[5], 50),
+    Bounce (buttonPins[6], 50),
+    Bounce (buttonPins[7], 50),
+    Bounce (buttonPins[8], 50),
+    Bounce (buttonPins[9], 50),
+    Bounce (buttonPins[10], 50),
+    Bounce (buttonPins[11], 50)
+  };
   
   int bankadd = 0;
 
@@ -136,148 +134,63 @@ void loop(){
       lcd.clear();
       lcd.setCursor(0,0);
       lcd.print("Redo ");
+      Keyboard.set_modifier(MODIFIERKEY_CTRL);
+      Keyboard.set_key1(KEY_Z);
+      Keyboard.send_now();
+      Keyboard.set_modifier(0);
+      Keyboard.set_key1(0);
+      Keyboard.send_now();
+      bank=bank-1;
     }
-
-
 
   bankadd = bank * CTRLBUTTONS_N;     //ATTENTION THAT HE READS 12 HERE
+
+
+  if (buttonStop.fallingEdge()) {
+    usbMIDI.sendControlChange((CTRL_STOP), 127, MIDI_CHAN);
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("Stop ");
+    Serial.println(String("ch=") + MIDI_CHAN + (", Control=") + (CTRL_STOP) + ("Velocity=127"));
+  }
+  if (buttonPlay.fallingEdge()) {
+    usbMIDI.sendControlChange((CTRL_PLAY), 127, MIDI_CHAN);
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("Play ");
+    Serial.println(String("ch=") + MIDI_CHAN + (", Control=") + (CTRL_PLAY) + ("Velocity=127"));
+  }
+
+
+
               
-                              // PUSHBUTTON EDGE DECLARATION
- // for(int i=0; i<CTRLBUTTONS_N; i++){   
-
-
-    if (buttonStop.fallingEdge()) {
-      usbMIDI.sendControlChange((CTRL_STOP), 127, MIDI_CHAN);
+                     
+  for(int i=0; i<CTRLBUTTONS_N; i++){   
+    if (buttons[i].fallingEdge()) {
+      usbMIDI.sendControlChange((CTRL_START+bankadd+i), 127, MIDI_CHAN);
       lcd.clear();
       lcd.setCursor(0,0);
-      lcd.print("Stop ");
-      Serial.println(String("ch=") + MIDI_CHAN + (", Control=") + (CTRL_STOP) + ("Velocity=127"));
+      lcd.print(" CTRL ");
+      lcd.print (CTRL_START+bankadd+i);
+      Serial.println(String(" ch= ") + MIDI_CHAN + (", Control = ") + (CTRL_START+bankadd+i) + (" Velocity = 127 "));
+      delTime[i]=millisTime;
+      delBool[i]=true;
     }
-   
-    if (buttonPlay.fallingEdge()) {
-      usbMIDI.sendControlChange((CTRL_PLAY), 127, MIDI_CHAN);
-      lcd.clear();
-      lcd.setCursor(0,0);
-      lcd.print("Play ");
-      Serial.println(String("ch=") + MIDI_CHAN + (", Control=") + (CTRL_PLAY) + ("Velocity=127"));
-    }
-
- 
-    if (button0.fallingEdge()) {
-      usbMIDI.sendControlChange((CTRL_START+bankadd+1), 127, MIDI_CHAN);
-      lcd.clear();
-      lcd.setCursor(0,0);
-      lcd.print("CTRL ");
-      lcd.print (CTRL_START+bankadd+1);
-      Serial.println(String("ch=") + MIDI_CHAN + (", Control=") + (CTRL_START+bankadd+1) + ("Velocity=127"));
-      delTime[0]=millisTime;
-      delBool[0]=true;
-    }
-    if (button0.risingEdge()) {
-      delBool[0]=false;
-    }
-    
-                                                                  //put this into forloop  
-    if (millisTime-delTime[0]>=delHold && delBool[0]==true) {
-      delBool[0]=false;
+    if (buttons[i].risingEdge()) {                                  //if the button gets released before delHold, delbool is false and the delete function cannot be sent
+      delBool[i]=false;
+    }                                                             
+    if (millisTime-delTime[i]>=delHold && delBool[i]==true) {        //for each button the possible delete function if delbool is true and pressure time longer than delHold (3s)
+      delBool[i]=false;
       Serial.println ("DELETE ");
       lcd.clear();
       lcd.setCursor(0,0);
       lcd.print("Delete ");
+      Keyboard.set_key1(KEY_DELETE);                      //send a keyboard DEL
+      Keyboard.send_now();
+      Keyboard.set_key1(0);
+      Keyboard.send_now();
     }
-
-
-       
-    else if (button1.fallingEdge()) {
-      usbMIDI.sendControlChange((CTRL_START+bankadd+2), 127, MIDI_CHAN);
-      lcd.clear();
-      lcd.setCursor(0,0);
-      lcd.print("CTRL ");
-      lcd.print (CTRL_START+bankadd+2);
-      Serial.println(String("ch=") + MIDI_CHAN + (", Control=") + (CTRL_START+bankadd+2) + ("Velocity=127"));
-    }
-    else if (button2.fallingEdge()) {
-      usbMIDI.sendControlChange((CTRL_START+bankadd+3), 127, MIDI_CHAN);
-      lcd.clear();
-      lcd.setCursor(0,0);
-      lcd.print("CTRL ");
-      lcd.print (CTRL_START+bankadd+3);
-      Serial.println(String("ch=") + MIDI_CHAN + (", Control=") + (CTRL_START+bankadd+3) + ("Velocity=127"));
-    }
-    else if (button3.fallingEdge()) {
-      usbMIDI.sendControlChange((CTRL_START+bankadd+4), 127, MIDI_CHAN);
-      lcd.clear();
-      lcd.setCursor(0,0);
-      lcd.print("CTRL ");
-      lcd.print (CTRL_START+bankadd+4);
-      Serial.println(String("ch=") + MIDI_CHAN + (", Control=") + (CTRL_START+bankadd+4) + ("Velocity=127"));
-    }
-    else if (button4.fallingEdge()) {
-      usbMIDI.sendControlChange((CTRL_START+bankadd+5), 127, MIDI_CHAN);
-      lcd.clear();
-      lcd.setCursor(0,0);
-      lcd.print("CTRL ");
-      lcd.print (CTRL_START+bankadd+5);
-      Serial.println(String("ch=") + MIDI_CHAN + (", Control=") + (CTRL_START+bankadd+5) + ("Velocity=127"));
-    }
-    else if (button5.fallingEdge()) {
-      usbMIDI.sendControlChange((CTRL_START+bankadd+6), 127, MIDI_CHAN);
-      lcd.clear();
-      lcd.setCursor(0,0);
-      lcd.print("CTRL ");
-      lcd.print (CTRL_START+bankadd+6);
-      Serial.println(String("ch=") + MIDI_CHAN + (", Control=") + (CTRL_START+bankadd+6) + ("Velocity=127"));
-    }
-    else if (button6.fallingEdge()) {
-      usbMIDI.sendControlChange((CTRL_START+bankadd+7), 127, MIDI_CHAN);
-      lcd.clear();
-      lcd.setCursor(0,0);
-      lcd.print("CTRL ");
-      lcd.print (CTRL_START+bankadd+7);
-      Serial.println(String("ch=") + MIDI_CHAN + (", Control=") + (CTRL_START+bankadd+7) + ("Velocity=127"));
-    }
-    else if (button7.fallingEdge()) {
-      usbMIDI.sendControlChange((CTRL_START+bankadd+8), 127, MIDI_CHAN);
-      lcd.clear();
-      lcd.setCursor(0,0);
-      lcd.print("CTRL ");
-      lcd.print (CTRL_START+bankadd+8);
-      Serial.println(String("ch=") + MIDI_CHAN + (", Control=") + (CTRL_START+bankadd+8) + ("Velocity=127"));
-    }
-    else if (button8.fallingEdge()) {
-      usbMIDI.sendControlChange((CTRL_START+bankadd+9), 127, MIDI_CHAN);
-      lcd.clear();
-      lcd.setCursor(0,0);
-      lcd.print("CTRL ");
-      lcd.print (CTRL_START+bankadd+9);
-      Serial.println(String("ch=") + MIDI_CHAN + (", Control=") + (CTRL_START+bankadd+9) + ("Velocity=127"));
-    }
-    else if (button9.fallingEdge()) {
-      usbMIDI.sendControlChange((CTRL_START+bankadd+10), 127, MIDI_CHAN);
-      lcd.clear();
-      lcd.setCursor(0,0);
-      lcd.print("CTRL ");
-      lcd.print (CTRL_START+bankadd+10);
-      Serial.println(String("ch=") + MIDI_CHAN + (", Control=") + (CTRL_START+bankadd+10) + ("Velocity=127"));
-    }
-     else if (button10.fallingEdge()) {
-      usbMIDI.sendControlChange((CTRL_START+bankadd+11), 127, MIDI_CHAN);
-      lcd.clear();
-      lcd.setCursor(0,0);
-      lcd.print("CTRL ");
-      lcd.print (CTRL_START+bankadd+11);
-      Serial.println(String("ch=") + MIDI_CHAN + (", Control=") + (CTRL_START+bankadd+11) + ("Velocity=127"));
-    }
-    else if (button11.fallingEdge()) {
-      usbMIDI.sendControlChange((CTRL_START+bankadd+12), 127, MIDI_CHAN);
-      lcd.clear();
-      lcd.setCursor(0,0);
-      lcd.print("CTRL ");
-      lcd.print (CTRL_START+bankadd+12);
-      Serial.println(String("ch=") + MIDI_CHAN + (", Control=") + (CTRL_START+bankadd+12) + ("Velocity=127"));
-    }
-
-  
+  }
 }
 
 
@@ -285,18 +198,9 @@ void readButtons(){
   buttonBank.update();
   buttonStop.update();
   buttonPlay.update();
-  button0.update();
-  button1.update();
-  button2.update();
-  button3.update();
-  button4.update();
-  button5.update();
-  button6.update();
-  button7.update();
-  button8.update();
-  button9.update();
-  button10.update();
-  button11.update();
+  for(int i=0; i<CTRLBUTTONS_N; i++){   
+    buttons[i].update();
+  }
 }
 
 
