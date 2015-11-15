@@ -1,4 +1,4 @@
-                                  //LCD & SHIELD Libraries
+                                    //LCD & SHIELD Libraries
   #include <Wire.h>
   #include <Adafruit_MCP23017.h>
   #include <Adafruit_RGBLCDShield.h>
@@ -26,30 +26,31 @@
   #define CTRL_DEL
   #define CTRL_STOP 72        //begin of control values available to footpedal (71-128)
   #define CTRL_PLAY 71
-  #define CTRL_START 73      //start of ctrl values for buttons (number up in forloop)
+  #define CTRL_START 73       //start of ctrl values for buttons (number up in forloop)
+  #define BOUNCE_T 50         //bounce time in ms
+  int ctrlval[CTRLBUTTONS_N];  //control message bank, just to make sure that two buttons simultaneously clicked still get their momentary message sent
   int bank = 0;
 
-  #define CTRLBUTTONS_N 12
   int buttonPins[] = {2,3,4,5,/*6,*/7,8,9,10,/*11,*/12,20,21,22,/*23*/};  //All button pins except bank, stop and play button
   // int buttons[CTRLBUTTONS_N];
 
-  Bounce buttonBank = Bounce(BUTTONBANK, 50);                  
-  Bounce buttonStop = Bounce(BUTTONSTOP, 50);
-  Bounce buttonPlay = Bounce (BUTTONPLAY, 50);
+  Bounce buttonBank = Bounce(BUTTONBANK, BOUNCE_T);                  
+  Bounce buttonStop = Bounce(BUTTONSTOP, BOUNCE_T);
+  Bounce buttonPlay = Bounce (BUTTONPLAY, BOUNCE_T);
   
   Bounce buttons[12] = {
-    Bounce (buttonPins[0], 50), 
-    Bounce (buttonPins[1], 50), 
-    Bounce (buttonPins[2], 50), 
-    Bounce (buttonPins[3], 50),
-    Bounce (buttonPins[4], 50),
-    Bounce (buttonPins[5], 50),
-    Bounce (buttonPins[6], 50),
-    Bounce (buttonPins[7], 50),
-    Bounce (buttonPins[8], 50),
-    Bounce (buttonPins[9], 50),
-    Bounce (buttonPins[10], 50),
-    Bounce (buttonPins[11], 50)
+    Bounce (buttonPins[0], BOUNCE_T), 
+    Bounce (buttonPins[1], BOUNCE_T), 
+    Bounce (buttonPins[2], BOUNCE_T), 
+    Bounce (buttonPins[3], BOUNCE_T),
+    Bounce (buttonPins[4], BOUNCE_T),
+    Bounce (buttonPins[5], BOUNCE_T),
+    Bounce (buttonPins[6], BOUNCE_T),
+    Bounce (buttonPins[7], BOUNCE_T),
+    Bounce (buttonPins[8], BOUNCE_T),
+    Bounce (buttonPins[9], BOUNCE_T),
+    Bounce (buttonPins[10], BOUNCE_T),
+    Bounce (buttonPins[11], BOUNCE_T)
   };
   
   int bankadd = 0;
@@ -159,11 +160,7 @@ void loop(){
     lcd.setCursor(0,0);
     lcd.print("Play ");
     Serial.println(String("ch=") + MIDI_CHAN + (", Control=") + (CTRL_PLAY) + ("Velocity=127"));
-  }
-
-
-
-              
+  }              
                      
   for(int i=0; i<CTRLBUTTONS_N; i++){   
     if (buttons[i].fallingEdge()) {
@@ -172,12 +169,45 @@ void loop(){
       lcd.setCursor(0,0);
       lcd.print(" CTRL ");
       lcd.print (CTRL_START+bankadd+i);
+      lcd.setCursor(0,1);
+      lcd.print(" 127");
       Serial.println(String(" ch= ") + MIDI_CHAN + (", Control = ") + (CTRL_START+bankadd+i) + (" Velocity = 127 "));
       delTime[i]=millisTime;
       delBool[i]=true;
+      ctrlval[i]=(CTRL_START+bankadd+i);
     }
     if (buttons[i].risingEdge()) {                                  //if the button gets released before delHold, delbool is false and the delete function cannot be sent
+      
+ //SEE IF THIS WORKS      
+      //if (i==8||i==9||i==10||i==11 && (delBool[i]==true)){        //sends ctrl 0 (momentary midi msg) on the bottom four buttons
+      if (ctrlval[i]==73 || ctrlval[i]==85 ||                          //sends ctrl 0 (momentary midi msg) on the top four buttons            
+          ctrlval[i]==74 || ctrlval[i]==86 ||
+          ctrlval[i]==75 || ctrlval[i]==87 ||
+          ctrlval[i]==76 || ctrlval[i]==88 ||
+
+          ctrlval[i]==77 || ctrlval[i]==89 ||                          //sends ctrl 0 (momentary midi msg) on the middle four buttons            
+          ctrlval[i]==78 || ctrlval[i]==90 ||
+          ctrlval[i]==79 || ctrlval[i]==91 ||
+          ctrlval[i]==80 || ctrlval[i]==92 ||
+          
+          ctrlval[i]==81 || ctrlval[i]==93 ||                          //sends ctrl 0 (momentary midi msg) on the bottom four buttons            
+          ctrlval[i]==82 || ctrlval[i]==94 ||
+          ctrlval[i]==83 || ctrlval[i]==95 ||
+          ctrlval[i]==84 || ctrlval[i]==96 &&  (delBool[i]==true)){
+        usbMIDI.sendControlChange(ctrlval[i], 0, MIDI_CHAN);
+        //usbMIDI.sendControlChange((CTRL_START+bankadd+i), 0, MIDI_CHAN);
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print(" CTRL ");
+        lcd.print (ctrlval[i]);
+        lcd.setCursor(0,1);
+        lcd.print(" 0");
+        Serial.println(String(" ch= ") + MIDI_CHAN + (", Control = ") + (CTRL_START+bankadd+i) + (" Velocity = 0 MOMENTARY "));
+      }
+
+//SEE IF THIS WORKS
       delBool[i]=false;
+      
     }                                                             
     if (millisTime-delTime[i]>=delHold && delBool[i]==true) {        //for each button send a "delete" control value (mapped to delete looper button) if delbool is true and pressure time longer than delHold (3s)
       delBool[i]=false;
